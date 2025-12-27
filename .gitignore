@@ -1,0 +1,57 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Python Virtual Environment
+venv/
+env/
+.venv/
+.env/
+**/venv/
+**/__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# MongoDB Data
+data/
+**/data/
+
+# Uploads
+uploads/
+**/uploads/
+
+# Environment Variables
+.env
+.env.local
+.env.*.local
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Build Output
+dist/
+build/
+*.local
+
+# ML Models & Cache
+.cache/
+.huggingface/
+.paddlehub/
+*.pt
+*.pth
+*.bin
+*.onnx
+*.ckpt
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

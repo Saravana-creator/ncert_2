@@ -1,0 +1,14 @@
+{
+  "name": "ncert-doubt-solver",
+  "version": "1.0.0",
+  "description": "NCERT Doubt Solver with AI-powered responses",
+  "scripts": {
+    "install-all": "cd backend && npm install && cd ../frontend/ncert && npm install",
+    "start-backend": "cd backend && npm start",
+    "start-frontend": "cd frontend/ncert && npm run dev",
+    "start-ai": "cd backend/ai_model_training && python main.py"
+  },
+  "keywords": ["ncert", "ai", "education", "doubt-solver"],
+  "author": "NCERT Team",
+  "license": "MIT"
+}

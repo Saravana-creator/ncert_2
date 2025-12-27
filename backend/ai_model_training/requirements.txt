@@ -1,0 +1,15 @@
+fastapi==0.110.0
+uvicorn[standard]==0.29.0
+pydantic==2.6.4
+
+PyPDF2==3.0.1
+pillow==10.2.0
+numpy==1.26.4
+
+# Core ML stack
+transformers==4.37.2
+torch==2.1.2
+sentence-transformers==2.2.2
+
+# For better compatibility
+huggingface-hub==0.20.0
