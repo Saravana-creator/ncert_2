@@ -9,31 +9,50 @@ router.post("/", async (req, res) => {
   try {
     const { userId, message, grade } = req.body;
 
-    let aiResponse;
+    let aiResponseText = "";
+    
     try {
       const ai = await axios.post("http://localhost:8001/ask", {
         question: message,
         grade
       });
-      aiResponse = ai.data.answer;
+      
+      const { answer, citations } = ai.data;
+      
+      aiResponseText = answer;
+      
+      if (citations && citations.length > 0) {
+          aiResponseText += "\n\n**Sources:**\n" + citations.map(c => `- ${c}`).join("\n");
+      }
+      
     } catch (error) {
-      console.log("AI service not available:", error.message);
-      aiResponse = "Sorry, the AI service is currently unavailable. Please try again later.";
+      console.log("AI service error:", error.message);
+      if (error.code === 'ECONNREFUSED') {
+          aiResponseText = "⚠️ **System Unavailable**: The AI service is currently offline. Please try again later.";
+      } else {
+          aiResponseText = "⚠️ **Error**: " + (error.response?.data?.message || "Something went wrong processing your request.");
+      }
     }
 
     // Check if mongoose is connected
     if (mongoose.connection.readyState !== 1) {
       console.log('MongoDB not connected, skipping database save');
-      return res.json({ answer: aiResponse });
+      return res.json({ answer: aiResponseText });
     }
 
-    const chat = await Chat.findOneAndUpdate(
-      { userId },
-      { $push: { messages: [{ role: "user", content: message }, { role: "assistant", content: aiResponse }] } },
-      { upsert: true, new: true, maxTimeMS: 5000 }
-    );
+    // Save to History
+    try {
+        const chat = await Chat.findOneAndUpdate(
+          { userId },
+          { $push: { messages: [{ role: "user", content: message }, { role: "assistant", content: aiResponseText }] } },
+          { upsert: true, new: true, maxTimeMS: 5000 }
+        );
+    } catch(dbErr) {
+        console.error("Failed to save chat history:", dbErr.message);
+        // Don't fail the request just because DB save failed
+    }
 
-    res.json({ answer: aiResponse });
+    res.json({ answer: aiResponseText });
   } catch (error) {
     console.error("Chat error:", error);
     res.status(500).json({ error: "Failed to process chat message" });

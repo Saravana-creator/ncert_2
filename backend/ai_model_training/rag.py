@@ -14,66 +14,126 @@ except Exception as e:
     embedding_model = None
 
 # Dynamic vector storage with embeddings
-VECTOR_DB = []  # List of (embedding, text) tuples
+# Structure: {'embedding': np.array, 'text': str, 'source': str, 'page': int}
+VECTOR_DB = []
 
-def add_to_vector_db(text):
-    """Add text chunks with embeddings to vector database"""
-    if not text or len(text.strip()) < 10:
-        print("Text too short, skipping...")
+def add_to_vector_db(content_list):
+    """
+    Add list of content dicts to vector database.
+    Input: [{'text': str, 'page': int, 'source': str}]
+    """
+    if not content_list:
         return
         
-    # Create chunks of 500 characters
-    chunks = [text[i:i+500] for i in range(0, len(text), 500)]
-    
     added_count = 0
-    for chunk in chunks:
-        if len(chunk.strip()) > 20:
+    
+    for item in content_list:
+        text = item.get('text', '')
+        if len(text.strip()) < 20:
+            continue
+            
+        # Chunk large pages into smaller segments for better retrieval
+        chunks = [text[i:i+600] for i in range(0, len(text), 500)] # 100 char overlap
+        
+        for chunk in chunks:
+            if len(chunk.strip()) < 30:
+                continue
+                
+            entry = {
+                'text': chunk.strip(),
+                'source': item.get('source', 'Unknown'),
+                'page': item.get('page', 0),
+                'embedding': None
+            }
+            
             if use_embeddings and embedding_model:
-                embedding = embedding_model.encode(chunk.strip())
-                VECTOR_DB.append((embedding, chunk.strip()))
-            else:
-                VECTOR_DB.append((None, chunk.strip()))
+                try:
+                    entry['embedding'] = embedding_model.encode(chunk.strip())
+                except Exception as e:
+                    print(f"Encoding error: {e}")
+            
+            VECTOR_DB.append(entry)
             added_count += 1
     
     print(f"✓ Added {added_count} chunks. Total: {len(VECTOR_DB)}")
 
 def retrieve(query):
-    """Semantic search using embeddings"""
+    """
+    Semantic search using embeddings.
+    Returns: [{'text': str, 'source': str, 'page': int, 'score': float}]
+    """
     if not VECTOR_DB:
         print("✗ Vector DB is empty")
         return []
+        
+    results = []
     
     if use_embeddings and embedding_model:
         # Semantic search
-        query_embedding = embedding_model.encode(query)
-        
-        similarities = []
-        for embedding, chunk in VECTOR_DB:
-            if embedding is not None:
-                similarity = np.dot(query_embedding, embedding) / (
-                    np.linalg.norm(query_embedding) * np.linalg.norm(embedding)
-                )
-                similarities.append((similarity, chunk))
-        
-        similarities.sort(key=lambda x: x[0], reverse=True)
-        result = [chunk for _, chunk in similarities[:5]]
-        
-        print(f"✓ Found {len(result)} chunks (semantic search)")
-        return result
-    
+        try:
+            query_embedding = embedding_model.encode(query)
+            
+            # Filter entries with embeddings
+            valid_entries = [e for e in VECTOR_DB if e['embedding'] is not None]
+            
+            if not valid_entries:
+                return []
+                
+            # Convert to numpy arrays for matrix operation
+            embeddings = np.array([e['embedding'] for e in valid_entries])
+            
+            # Compute cosine similarity
+            norms = np.linalg.norm(embeddings, axis=1) * np.linalg.norm(query_embedding)
+            norms[norms == 0] = 1e-10 
+            
+            scores = np.dot(embeddings, query_embedding) / norms
+            
+            # Filter by threshold (0.4 is a good balance for BGE-M3)
+            THRESHOLD = 0.35
+            
+            # Get indices where score > THRESHOLD
+            relevant_indices = np.where(scores > THRESHOLD)[0]
+            
+            if len(relevant_indices) == 0:
+                print(f"✗ No chunks exceeded threshold {THRESHOLD}")
+                return []
+                
+            # Sort only relevant indices
+            relevant_scores = scores[relevant_indices]
+            top_k_indices = relevant_indices[np.argsort(relevant_scores)[::-1][:5]]
+            
+            for idx in top_k_indices:
+                entry = valid_entries[idx]
+                results.append({
+                    'text': entry['text'],
+                    'source': entry['source'],
+                    'page': entry['page'],
+                    'score': float(scores[idx])
+                })
+                
+            print(f"✓ Found {len(results)} chunks above threshold")
+            
+        except Exception as e:
+            print(f"Retrieval error: {e}")
+            return []
+            
     else:
         # Keyword fallback
         query_words = [word for word in query.lower().split() if len(word) > 2]
-        relevant_chunks = []
         
-        for _, chunk in VECTOR_DB:
-            chunk_lower = chunk.lower()
+        for entry in VECTOR_DB:
+            chunk_lower = entry['text'].lower()
             score = sum(1 for word in query_words if word in chunk_lower)
             if score > 0:
-                relevant_chunks.append((score, chunk))
+                results.append({
+                    'text': entry['text'],
+                    'source': entry['source'],
+                    'page': entry['page'],
+                    'score': float(score)
+                })
         
-        relevant_chunks.sort(key=lambda x: x[0], reverse=True)
-        result = [chunk for _, chunk in relevant_chunks[:5]]
+        results.sort(key=lambda x: x['score'], reverse=True)
+        results = results[:5]
+        print(f"✓ Found {len(results)} chunks (keyword search)")
         
-        print(f"✓ Found {len(result)} chunks (keyword search)")
-        return result
+    return results

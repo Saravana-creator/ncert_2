@@ -38,9 +38,11 @@ ncert_initial/
    npm run install-all
    ```
 
-2. **Install Python dependencies:**
+2. **Install Python dependencies (with Virtual Environment):**
    ```bash
    cd backend/ai_model_training
+   python -m venv venv
+   venv\Scripts\activate
    pip install -r requirements.txt
    ```
 
@@ -50,43 +52,27 @@ ncert_initial/
 
 2. **Start AI Service:**
    ```bash
-   npm run start-ai
-   # or manually: cd backend/ai_model_training && python main.py
+   cd backend/ai_model_training
+   venv\Scripts\activate
+   python main.py
    ```
 
 3. **Start Backend Server:**
    ```bash
-   npm run start-backend
-   # or manually: cd backend && npm start
+   cd backend
+   npm start
    ```
 
 4. **Start Frontend:**
    ```bash
-   npm run start-frontend
-   # or manually: cd frontend/ncert && npm run dev
+   cd frontend/ncert
+   npm run dev
    ```
-
-## API Endpoints
-
-### Backend (Port 3000)
-- `POST /upload` - Upload NCERT files
-- `POST /chat` - Send chat messages
-- `GET /history/:userId` - Get chat history
-
-### AI Service (Port 8000)
-- `POST /ingest` - Process uploaded files
-- `POST /ask` - Ask questions to AI
-
-## Technologies Used
-
-- **Frontend**: React, Vite, Tailwind CSS
-- **Backend**: Node.js, Express, MongoDB
-- **AI/ML**: FastAPI, Transformers, PaddleOCR, Sentence Transformers
-- **Database**: MongoDB with Mongoose
 
 ## Development Notes
 
 - The application uses ES modules (`"type": "module"`)
 - CORS is configured for cross-origin requests
 - File uploads are handled with Multer
-- AI responses are generated using Meta-Llama model
+- AI responses are generated using **TinyLlama-1.1B-Chat** model
+- Optimized for multilingual NCERT content with citations.

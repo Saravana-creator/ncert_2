@@ -1,147 +1,122 @@
-#This is for generating answers using FLAN-T5 (Google's instruction-tuned model)
+# Using Qwen2.5-1.5B-Instruct for state-of-the-art reasoning and reliability
 
 import re
+import torch
+from transformers import AutoTokenizer, AutoModelForCausalLM
 
 try:
-    from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
-    import torch
-    
-    print("Loading FLAN-T5-base model...")
-    model_name = "google/flan-t5-base"
+    # Qwen2.5 is significantly better at logic than TinyLlama
+    print("Loading Qwen2.5-1.5B-Instruct...")
+    model_name = "Qwen/Qwen2.5-1.5B-Instruct"
     
     tokenizer = AutoTokenizer.from_pretrained(model_name)
-    model = AutoModelForSeq2SeqLM.from_pretrained(
+    model = AutoModelForCausalLM.from_pretrained(
         model_name,
         torch_dtype=torch.float32,
+        device_map="auto",
         low_cpu_mem_usage=True
     )
-    print("[OK] FLAN-T5-base loaded successfully (850MB)")
+    print("[OK] Qwen2.5 loaded successfully")
     model_loaded = True
 except Exception as e:
-    print(f"[ERROR] FLAN-T5 failed: {e}")
+    print(f"[ERROR] Qwen2.5 fails: {e}. Falling back to basic logic.")
     model_loaded = False
     tokenizer = None
     model = None
 
-def answer(question, context):
-    """Generate intelligent answer"""
-    if not context:
-        return "I don't have information about this topic in the uploaded NCERT materials. Please upload relevant content first."
+def answer(question, context_items):
+    """
+    Generate accurate answer using RAG context with Chain-of-Thought.
+    """
+    if not context_items:
+        return {
+            "answer": "I don't have enough specific information in the uploaded NCERT chapters to answer this accurately. Please upload the relevant chapter pages.",
+            "citations": []
+        }
     
-    question_lower = question.lower()
-    combined_context = " ".join(context)[:1000]
-    
-    # Handle math questions with direct calculation
-    math_result = handle_math_question(question_lower)
+    # Check for direct math calculation first to avoid model confusion
+    math_result = handle_math_question(question)
     if math_result:
-        return math_result
+        return {"answer": math_result, "citations": ["Calculator Tool"]}
+
+    context_text = ""
+    citations = []
+    seen = set()
     
-    # Use FLAN-T5 for reasoning
+    for i, item in enumerate(context_items):
+        source = f"{item['source']} (Page {item['page']})"
+        context_text += f"Source [{i+1}] (from {source}):\n{item['text']}\n\n"
+        if source not in seen:
+            citations.append(source)
+            seen.add(source)
+
     if model_loaded and model and tokenizer:
         try:
-            # FLAN-T5 works best with clear instructions
-            prompt = f"""Answer the question based on the context.
+            # Enhanced prompt with Step-by-Step reasoning (Chain of Thought)
+            prompt = f"""<|im_start|>system
+You are a precise NCERT Subject Matter Expert. Your goal is to provide ACCURATE answers based ONLY on the provided context.
 
-Context: {combined_context}
+RULES:
+1. If the info is NOT in the context, clearly state: "The provided materials do not contain this information."
+2. Be extremely careful with chronology (before/after/first/last).
+3. Ignore irrelevant context (e.g., ignore Math formulas if the question is about History).
+4. Use a TWO-STEP process: 
+   - Step 1: Extract direct evidence from the sources.
+   - Step 2: Formulate the final answer based on that evidence.
+<|im_end|>
+<|im_start|>user
+Context:
+{context_text[:2000]}
 
 Question: {question}
 
-Answer:"""
+Please answer in this format:
+- Reasoning: (Briefly explain your logic using step 1)
+- Answer: (The final classroom-ready answer)
+<|im_end|>
+<|im_start|>assistant
+"""
             
-            inputs = tokenizer(prompt, return_tensors="pt", max_length=512, truncation=True)
+            inputs = tokenizer(prompt, return_tensors="pt")
             
             with torch.no_grad():
                 outputs = model.generate(
                     **inputs,
-                    max_length=150,
-                    min_length=10,
-                    temperature=0.7,
-                    do_sample=True,
-                    top_p=0.9,
-                    num_return_sequences=1
+                    max_new_tokens=400,
+                    do_sample=False, # Use greedy for higher factual accuracy
+                    temperature=0.0   # 0.0 effectively with greedy
                 )
             
-            answer_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
+            response = tokenizer.decode(outputs[0][len(inputs['input_ids'][0]):], skip_special_tokens=True).strip()
             
-            if len(answer_text.strip()) > 10:
-                return f"**Answer:** {answer_text}\n\n*Based on your uploaded NCERT materials*"
-            else:
-                return generate_structured_answer(question, combined_context)
+            # Clean up the output if it produces extra tokens
+            answer_text = response.split("<|im_end|>")[0].strip()
+            
+            return {
+                "answer": answer_text,
+                "citations": citations
+            }
                 
         except Exception as e:
             print(f"[ERROR] Generation error: {e}")
-            return generate_structured_answer(question, combined_context)
+            return generate_structured_answer(question, context_items)
     else:
-        return generate_structured_answer(question, combined_context)
+        return generate_structured_answer(question, context_items)
 
 def handle_math_question(question):
-    """Handle mathematical calculations"""
-    question_lower = question.lower()
-    
-    # Convert word numbers to digits
-    word_to_num = {
-        'thousand': 1000, 'hundred': 100, 'ten': 10,
-        'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5,
-        'six': 6, 'seven': 7, 'eight': 8, 'nine': 9
-    }
-    
-    numbers = []
-    
-    # Find digit numbers
-    digit_nums = re.findall(r'\d+[,\d]*', question)
-    for num in digit_nums:
-        numbers.append(int(num.replace(',', '')))
-    
-    # Find word numbers
-    for word, value in word_to_num.items():
-        if word in question_lower:
-            numbers.append(value)
-    
-    if len(numbers) < 2:
-        return None
-    
-    try:
-        num1 = numbers[0]
-        num2 = numbers[1]
-        
-        if 'add' in question_lower or 'plus' in question_lower or 'sum' in question_lower:
-            result = num1 + num2
-            return f"**Answer:** When we add {num1:,} and {num2:,}, we get **{result:,}**\n\n*Arithmetic calculation*"
-        
-        elif 'subtract' in question_lower or 'minus' in question_lower:
-            result = num1 - num2
-            return f"**Answer:** When we subtract {num2:,} from {num1:,}, we get **{result:,}**\n\n*Arithmetic calculation*"
-        
-        elif 'multiply' in question_lower or 'times' in question_lower:
-            result = num1 * num2
-            return f"**Answer:** {num1:,} × {num2:,} = **{result:,}**\n\n*Arithmetic calculation*"
-        
-        elif 'divide' in question_lower:
-            result = num1 / num2
-            return f"**Answer:** {num1:,} ÷ {num2:,} = **{result:,.2f}**\n\n*Arithmetic calculation*"
-    
-    except:
-        pass
-    
+    """Handle basic math to prevent LLM hallucinations on numbers"""
+    q = question.lower()
+    # Simple regex for 'convert X m to km' or '2500m to km'
+    match = re.search(r'(\d+)\s*(m|meter|meters)\s*(in|to|as)\s*(km|kilometer|kilometers)', q)
+    if match:
+        val = float(match.group(1))
+        return f"**Answer:** {val} meters is equal to **{val/1000} kilometers** (1 km = 1000 m)."
     return None
 
-def generate_structured_answer(question, context):
-    """Fallback structured answer"""
-    question_lower = question.lower()
-    sentences = [s.strip() + '.' for s in context.split('.') if len(s.strip()) > 20]
-    relevant = sentences[:3]
-    
-    response = "**Answer:**\n\n"
-    
-    if 'what' in question_lower or 'define' in question_lower:
-        response += "**Definition:** "
-    elif 'how' in question_lower:
-        response += "**Explanation:** "
-    elif 'why' in question_lower:
-        response += "**Reason:** "
-    
-    for sent in relevant:
-        response += f"{sent} "
-    
-    response += "\n\n*Based on your uploaded NCERT materials*"
-    return response
+def generate_structured_answer(question, context_items):
+    """Fallback: Return most relevant chunk directly"""
+    best = context_items[0]
+    return {
+        "answer": f"**Evidence found in book:**\n{best['text']}\n\n*(Model offline - showing direct source)*",
+        "citations": [f"{best['source']} (Page {best['page']})"]
+    }

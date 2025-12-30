@@ -19,19 +19,26 @@ class QuestionRequest(BaseModel):
 def ingest(data: IngestRequest):
     try:
         result = ingest_file(data.path)
-        return {"status":"success", "message": "File processed and added to knowledge base"}
+        return {"status":"success", "message": str(result)}
     except Exception as e:
         return {"status":"error", "message": str(e)}
 
 @app.post("/ask")
 def ask(data: QuestionRequest):
     try:
+        # retrieve returns list of dicts [{'text':..., 'page':...}]
         docs = retrieve(data.question)
-        if not docs:
-            return {"answer":"I don't have information about this topic in the uploaded NCERT materials. Please upload relevant content first."}
-        return {"answer": answer(data.question, docs)}
+        
+        # llm.answer returns dict {'answer':..., 'citations':...}
+        response = answer(data.question, docs)
+        
+        return response
     except Exception as e:
-        return {"answer": f"Error processing question: {str(e)}"}
+        print(f"Error in /ask: {e}")
+        return {
+            "answer": f"Error processing question: {str(e)}",
+            "citations": []
+        }
 
 if __name__ == "__main__":
     import uvicorn

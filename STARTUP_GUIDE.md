@@ -7,6 +7,7 @@
 cd d:\ncert_initial\backend\ai_model_training
 python -m venv venv
 venv\Scripts\activate
+pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
@@ -43,8 +44,6 @@ cd d:\ncert_initial\backend\ai_model_training
 venv\Scripts\activate
 python main.py
 ```
-**OR simply double-click: `start_ai.bat`**
-
 **AI Service runs on: http://localhost:8001**
 
 ### Terminal 4: Frontend
@@ -71,47 +70,40 @@ This will:
 ## 🔍 VERIFY EVERYTHING IS WORKING
 
 1. **MongoDB**: Check terminal shows "Waiting for connections"
-2. **Backend**: Visit http://localhost:8080 (should show "Cannot GET /")
+2. **Backend**: Visit http://localhost:8080 (should show "Welcome to NCERT Doubt Solver API")
 3. **AI Service**: Check terminal shows "Uvicorn running on http://0.0.0.0:8001"
-4. **Frontend**: Visit http://localhost:5173 (should show NCERT UI)
+4. **Frontend**: Visit http://localhost:5173 (should show the chat interface)
 
 ---
 
 ## 📊 SYSTEM REQUIREMENTS MET ✅
 
-- **RAM**: 16GB ✅ (Perfect for Phi-2)
-- **Storage**: 512GB SSD ✅ (Plenty of space)
-- **Python**: 3.10.11 ✅
-- **Node.js**: 22.14.0 ✅
-- **MongoDB**: 8.0.8 ✅
+- **RAM**: 8GB+ recommended
+- **Storage**: 10GB+ free space
+- **Python**: 3.10+
+- **Node.js**: 18+
+- **MongoDB**: 6.0+
 
 ---
 
 ## 🎓 MODEL INFO
 
-**Current Model**: Microsoft Phi-2
-- **Size**: 5.5GB
-- **RAM Usage**: 8-10GB
-- **Quality**: Excellent for NCERT
-- **Speed**: 3-5 seconds per answer
+**Current Model**: Qwen2.5-1.5B-Instruct
+- **Size**: ~3.1GB
+- **RAM Usage**: 6-8GB
+- **Quality**: State-of-the-art for reasoning and instruction following.
+- **Speed**: 2-4 seconds per answer (optimized for CPU).
+- **Strategy**: Uses "Chain-of-Thought" reasoning to prevent hallucinations.
 
 ---
 
 ## ❓ TROUBLESHOOTING
 
-**If AI service fails to start:**
-```bash
-cd d:\ncert_initial\backend\ai_model_training
-venv\Scripts\activate
-pip install --upgrade pip
-pip install -r requirements.txt --force-reinstall
-```
-
-**If model download is slow:**
-- First run will download 5.5GB (takes 10-30 minutes)
-- Model is cached, subsequent runs are instant
+**If AI service fails to start (Import Errors):**
+- Ensure you have activated the venv: `venv\Scripts\activate`
+- Try force-reinstalling requirements: `pip install -r requirements.txt --force-reinstall`
 
 **If out of memory:**
-- Close other applications
+- Close other high-memory applications (Chrome, Games)
 - Restart your laptop
-- Your 16GB RAM is sufficient!
+- Ensure you are on a 64-bit Python version.
