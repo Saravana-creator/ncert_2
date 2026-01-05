@@ -1,21 +1,48 @@
 #This file is for RAG(Retrieval Augmented Generation) with Semantic Search
 
+import numpy as np
+import pickle
+import os
+
 try:
     from sentence_transformers import SentenceTransformer
-    import numpy as np
     
     print("Loading BAAI/bge-m3 embedding model...")
     embedding_model = SentenceTransformer("BAAI/bge-m3")
-    print("✓ BAAI/bge-m3 loaded successfully")
+    print("[OK] BAAI/bge-m3 loaded successfully")
     use_embeddings = True
 except Exception as e:
-    print(f"✗ Embedding model failed: {e}")
+    print(f"[ERROR] Embedding model failed: {e}")
     use_embeddings = False
     embedding_model = None
 
 # Dynamic vector storage with embeddings
 # Structure: {'embedding': np.array, 'text': str, 'source': str, 'page': int}
 VECTOR_DB = []
+DB_PATH = os.path.join(os.path.dirname(__file__), "vector_db.pkl")
+
+def save_db():
+    """Save vector database to disk."""
+    try:
+        with open(DB_PATH, 'wb') as f:
+            # We don't want to pickle the whole model, just the data
+            pickle.dump(VECTOR_DB, f)
+        print(f"[OK] Vector DB saved to {DB_PATH}")
+    except Exception as e:
+        print(f"[ERROR] Failed to save Vector DB: {e}")
+
+def load_db():
+    """Load vector database from disk."""
+    global VECTOR_DB
+    if os.path.exists(DB_PATH):
+        try:
+            with open(DB_PATH, 'rb') as f:
+                VECTOR_DB = pickle.load(f)
+            print(f"[OK] Loaded {len(VECTOR_DB)} chunks from {DB_PATH}")
+        except Exception as e:
+            print(f"[ERROR] Failed to load Vector DB: {e}")
+    else:
+        print("[INFO] No persistent Vector DB found. Starting fresh.")
 
 def add_to_vector_db(content_list):
     """
@@ -55,7 +82,8 @@ def add_to_vector_db(content_list):
             VECTOR_DB.append(entry)
             added_count += 1
     
-    print(f"✓ Added {added_count} chunks. Total: {len(VECTOR_DB)}")
+    print(f"[OK] Added {added_count} chunks. Total: {len(VECTOR_DB)}")
+    save_db()
 
 def retrieve(query):
     """
@@ -63,7 +91,7 @@ def retrieve(query):
     Returns: [{'text': str, 'source': str, 'page': int, 'score': float}]
     """
     if not VECTOR_DB:
-        print("✗ Vector DB is empty")
+        print("[ERROR] Vector DB is empty")
         return []
         
     results = []
@@ -95,7 +123,7 @@ def retrieve(query):
             relevant_indices = np.where(scores > THRESHOLD)[0]
             
             if len(relevant_indices) == 0:
-                print(f"✗ No chunks exceeded threshold {THRESHOLD}")
+                print(f"[ERROR] No chunks exceeded threshold {THRESHOLD}")
                 return []
                 
             # Sort only relevant indices
@@ -111,7 +139,7 @@ def retrieve(query):
                     'score': float(scores[idx])
                 })
                 
-            print(f"✓ Found {len(results)} chunks above threshold")
+            print(f"[OK] Found {len(results)} chunks above threshold")
             
         except Exception as e:
             print(f"Retrieval error: {e}")
@@ -134,6 +162,9 @@ def retrieve(query):
         
         results.sort(key=lambda x: x['score'], reverse=True)
         results = results[:5]
-        print(f"✓ Found {len(results)} chunks (keyword search)")
+        print(f"[OK] Found {len(results)} chunks (keyword search)")
         
     return results
+
+# Automatically load existing database on startup
+load_db()

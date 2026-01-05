@@ -12,7 +12,7 @@ from PyPDF2 import PdfReader
 # Initialize PaddleOCR with Hindi (which covers Devanagari) and English
 try:
     # lang='hi' supports Hindi and English characters
-    ocr = PaddleOCR(use_angle_cls=True, lang='hi', show_log=False)
+    ocr = PaddleOCR(use_angle_cls=True, lang='hi')
 except Exception as e:
     print(f"PaddleOCR initialization failed: {e}")
     ocr = None
